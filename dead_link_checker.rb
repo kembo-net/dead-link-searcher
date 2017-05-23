@@ -9,24 +9,29 @@ $URL_PATTERN = '(?!mailto:)(?:https?:\/\/)?[\w\/:%#\$&\?\(\)~\.=\+\-]+'
 @root_http.use_ssl = @root_uri.kind_of?(URI::HTTPS)
 @yomikae_host = ARGV[1]
 
+@stack = [[@root_url_str, true, '/', -1]]
 @log_loc = []
 @log_glb = []
 
 # URLの変換
 def analyze_url(url_str)
-  uri = URI.parse(url_str)
-  path = uri.path
-  is_local = (uri.host == @root_uri.host) or (uri.host == @yomikae_host)
-  if is_local
-    http = @root_http
-  else
-    http=Net::HTTP.new(uri.host, uri.port)
-    if uri.kind_of?(URI::HTTPS)
-      http.use_ssl = true
-      http.verify_mode = OpenSSL::SSL::VERIFY_NONE # なんかSSL証明書エラーが出るんで検証しない
+  begin
+    uri = URI.parse(url_str)
+    path = uri.path
+    is_local = (uri.host == @root_uri.host) or (uri.host == @yomikae_host)
+    if is_local
+      http = @root_http
+    else
+      http=Net::HTTP.new(uri.host, uri.port)
+      if uri.kind_of?(URI::HTTPS)
+        http.use_ssl = true
+        http.verify_mode = OpenSSL::SSL::VERIFY_NONE # なんかSSL証明書エラーが出るんで検証しない
+      end
     end
+  rescue Exception => e
+    raise e
   end
-  return [http, path, is_local]
+  return [http, path || '/', is_local]
 end
 
 # 訪問済みかどうかのチェック
@@ -49,21 +54,35 @@ end
 
 # ページの存在を確認し、存在しない場合結果を表示するメソッド
 # ローカルの場合は再帰的探索も行う
-def check_page(url_str, recursion=true, from_path='/', line_num=-1)
+until @stack.empty?
+  url_str, recursion, from_path, line_num = @stack.pop
   # URLを解析する 相対パスも考慮
   if url_str.match(/^http/)
-    http, path, is_local = analyze_url(url_str)
+    begin
+      http, path, is_local = analyze_url(url_str)
+    rescue Exception => e
+      puts "#{from_path}:#{line_num}(unknown error) #{url_str}"
+      return nil
+    end
   else
     http = @root_http
     path = URI.join(@root_uri.to_s, from_path, url_str).path
     is_local = true
+  end
+  if path.length == 0
+    path = '/'
   end
 
   # 探索済だったら帰る
   return nil if check_log(is_local, is_local ? path : url_str)
 
   # アクセス出来るかどうか
-  response = http.get(path)
+  begin
+    response = http.get(path)
+  rescue Exception => e
+    puts "#{from_path}:#{line_num}(connection error) #{url_str}"
+    return nil
+  end
   location = nil
   cnt = 0
   # リダイレクト
@@ -91,16 +110,12 @@ def check_page(url_str, recursion=true, from_path='/', line_num=-1)
     response.body.each_line.with_index do |line, line_num|
       # 画像を見つける（再帰チェックはしない）
       line.scan(/<img [^>]*src *= *['"]?(#{$URL_PATTERN})/i) do |match|
-        check_page(match[0], false, path, line_num)
+        @stack.push([match[0], false, path, line_num])
       end
       # リンクを見つける（再帰チェックするかも）
       line.scan(/<a [^>]*href *= *['"]?(#{$URL_PATTERN})/i) do |match|
-        check_page(match[0], true, path, line_num)
+        @stack.push([match[0], true, path, line_num])
       end
     end
   end
-
-  return response
 end
-
-check_page(@root_url_str)
