@@ -2,6 +2,10 @@ require "net/http"
 require "openssl"
 
 $URL_PATTERN = '(?!mailto:)(?:https?:\/\/)?[\w\/:%#\$&\?\(\)~\.=\+\-]+'
+ONCE_COMMAND = '--once'
+
+@once_mode = ARGV.include?(ONCE_COMMAND)
+ARGV.delete(ONCE_COMMAND)
 
 @root_url_str = ARGV[0]
 @root_uri = URI.parse(@root_url_str)
@@ -12,7 +16,7 @@ if @root_uri.kind_of?(URI::HTTPS)
 end
 @yomikae_host = ARGV[1]
 
-@stack = [[@root_url_str, true, '/', -1]]
+@stack = [[@root_url_str, !@once_mode, '/', -1]]
 @results = []
 @log_loc = []
 @log_glb = []
