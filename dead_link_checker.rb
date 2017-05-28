@@ -12,15 +12,14 @@ ARGV.delete(ONCE_COMMAND)
 
 @root_url_str = ARGV[0]
 @root_uri = URI.parse(@root_url_str)
-@root_uri.path = '/' if root_uri.path.empty?
+@root_uri.path = '/' if @root_uri.path.empty?
 @root_http=Net::HTTP.new(@root_uri.host, @root_uri.port)
 if @root_uri.kind_of?(URI::HTTPS)
   @root_http.use_ssl = true
   @root_http.verify_mode = OpenSSL::SSL::VERIFY_NONE # なんかSSL証明書エラーが出るんで検証しない
 end
 @yomikae_host = ARGV[1]
-@root_length = -1
-@progress = 0
+@root_length = nil
 
 @stack = [[@root_url_str, true, '.', -1]]
 @results = []
@@ -72,7 +71,7 @@ end
 # ページの存在を確認し、存在しない場合結果を表示するメソッド
 # ローカルの場合は再帰的探索も行う
 until @stack.empty?
-  url_str, recursion, from_path, line_num = @stack.shift
+  url_str, recursion, from_path, line_num = @stack.pop
 
   # 進捗の表示
   stat_message = from_path + ":#{line_num} " + url_str
@@ -174,17 +173,20 @@ until @stack.empty?
     if @root_length.nil?
       @root_length = response.body.count("\n")
     end
+    children = []
     response.body.each_line.with_index do |line, line_num|
       # 画像を見つける（再帰チェックはしない）
       line.scan(/<img [^>]*src *= *['"]?(#{$URL_PATTERN})/i) do |match|
-        @stack.push([match[0], false, path, line_num])
+        children.unshift([match[0], false, path, line_num])
       end
       # リンクを見つける（再帰チェックするかも）
       line.scan(/<a [^>]*href *= *['"]?(#{$URL_PATTERN})/i) do |match|
-        child_recursion = !(@once_mode || $IGNORE_PATTERNS.inject(false){|r, p| r || p.match })
-        @stack.push([match[0], child_recursion, path, line_num])
+        child_url = match[0]
+        child_recursion = !(@once_mode || $IGNORE_PATTERNS.inject(false){|r, p| r || p.match(child_url) })
+        children.unshift([child_url, child_recursion, path, line_num])
       end
     end
+    @stack += children
   end
 end
 
