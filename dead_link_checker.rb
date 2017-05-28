@@ -16,7 +16,7 @@ if @root_uri.kind_of?(URI::HTTPS)
 end
 @yomikae_host = ARGV[1]
 
-@stack = [[@root_url_str, !@once_mode, '/', -1]]
+@stack = [[@root_url_str, true, '/', -1]]
 @results = []
 @log_loc = []
 @log_glb = []
@@ -101,7 +101,7 @@ until @stack.empty?
 
   # アクセス出来るかどうか
   begin
-    response = http.get(path)
+    response = http.head(path)
   rescue Exception => e
     @results.push({
       path: from_path,
@@ -128,7 +128,7 @@ until @stack.empty?
     http, path, is_local = analyze_url(response['location'])
     # リダイレクト先にアクセス出来るかどうか
     begin
-      response = http.get(path)
+      response = http.head(path)
     rescue Exception => e
       @results.push({
         path: from_path,
@@ -136,17 +136,20 @@ until @stack.empty?
         message: 'connection error',
         url: url_str
       })
-      next
+      break
     end
   end
   unless response.is_a?(Net::HTTPSuccess)
-    # リンク切れだぞ
-    @results.push({
-      path: from_path,
-      line: line_num,
-      message: response.code,
-      url: url_str
-    })
+    # リダイレクト中のコネクションエラーを除外
+    unless response.is_a?(Net::HTTPRedirection)
+      # リンク切れだぞ
+      @results.push({
+        path: from_path,
+        line: line_num,
+        message: response.code,
+        url: url_str
+      })
+    end
     next
   end
   # 成功だぞ
@@ -155,6 +158,8 @@ until @stack.empty?
   # 再帰的チェック
   if is_local && recursion
     line_num = 0
+    # 中身を読み込む
+    response = http.get(path)
     response.body.each_line.with_index do |line, line_num|
       # 画像を見つける（再帰チェックはしない）
       line.scan(/<img [^>]*src *= *['"]?(#{$URL_PATTERN})/i) do |match|
@@ -162,7 +167,7 @@ until @stack.empty?
       end
       # リンクを見つける（再帰チェックするかも）
       line.scan(/<a [^>]*href *= *['"]?(#{$URL_PATTERN})/i) do |match|
-        @stack.push([match[0], true, path, line_num])
+        @stack.push([match[0], !@once_mode, path, line_num])
       end
     end
   end
