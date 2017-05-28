@@ -73,7 +73,7 @@ until @stack.empty?
   if stat_message.length <= 100
     stat_message = stat_message + (' ' * (100 - stat_message.length))
   else
-    stat_message = stat_message[0..97] + '...'
+    stat_message = stat_message[0...97] + '...'
   end
   print("\r" + stat_message)
 
