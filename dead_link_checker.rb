@@ -1,7 +1,10 @@
 require "net/http"
 require "openssl"
 
+# URLを識別する正規表現
 $URL_PATTERN = '(?!mailto:)(?:https?:\/\/)?[\w\/:%#\$&\?\(\)~\.=\+\-]+'
+# 再帰対象から除外するURLの正規表現
+$IGNORE_PATTERNS = [/\.pdf(\?.*)?$/i]
 ONCE_COMMAND = '--once'
 
 @once_mode = ARGV.include?(ONCE_COMMAND)
@@ -178,7 +181,8 @@ until @stack.empty?
       end
       # リンクを見つける（再帰チェックするかも）
       line.scan(/<a [^>]*href *= *['"]?(#{$URL_PATTERN})/i) do |match|
-        @stack.push([match[0], !@once_mode, path, line_num])
+        child_recursion = !(@once_mode || $IGNORE_PATTERNS.inject(false){|r, p| r || p.match })
+        @stack.push([match[0], child_recursion, path, line_num])
       end
     end
   end
