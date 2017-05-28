@@ -126,7 +126,18 @@ until @stack.empty?
       })
     end
     http, path, is_local = analyze_url(response['location'])
-    response = http.get(path)
+    # リダイレクト先にアクセス出来るかどうか
+    begin
+      response = http.get(path)
+    rescue Exception => e
+      @results.push({
+        path: from_path,
+        line: line_num,
+        message: 'connection error',
+        url: url_str
+      })
+      next
+    end
   end
   unless response.is_a?(Net::HTTPSuccess)
     # リンク切れだぞ
