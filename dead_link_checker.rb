@@ -9,6 +9,7 @@ ARGV.delete(ONCE_COMMAND)
 
 @root_url_str = ARGV[0]
 @root_uri = URI.parse(@root_url_str)
+@root_uri.path = '/' if root_uri.path.empty?
 @root_http=Net::HTTP.new(@root_uri.host, @root_uri.port)
 if @root_uri.kind_of?(URI::HTTPS)
   @root_http.use_ssl = true
