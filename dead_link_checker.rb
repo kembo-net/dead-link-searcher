@@ -16,7 +16,7 @@ if @root_uri.kind_of?(URI::HTTPS)
 end
 @yomikae_host = ARGV[1]
 
-@stack = [[@root_url_str, true, '/', -1]]
+@stack = [[@root_url_str, true, '.', -1]]
 @results = []
 @log_loc = []
 @log_glb = []
@@ -26,7 +26,7 @@ def analyze_url(url_str)
   begin
     uri = URI.parse(url_str)
     path = uri.path
-    is_local = (uri.host == @root_uri.host) or (uri.host == @yomikae_host)
+    is_local = (uri.host == @root_uri.host) || (uri.host == @yomikae_host)
     if is_local
       http = @root_http
     else
@@ -88,6 +88,7 @@ until @stack.empty?
         message: 'unknown error',
         url: url_str
       })
+      #raise e
       next
     end
   else
