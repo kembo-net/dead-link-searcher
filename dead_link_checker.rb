@@ -15,6 +15,8 @@ if @root_uri.kind_of?(URI::HTTPS)
   @root_http.verify_mode = OpenSSL::SSL::VERIFY_NONE # なんかSSL証明書エラーが出るんで検証しない
 end
 @yomikae_host = ARGV[1]
+@root_length = -1
+@progress = 0
 
 @stack = [[@root_url_str, true, '.', -1]]
 @results = []
@@ -76,6 +78,9 @@ until @stack.empty?
     stat_message = stat_message[0...97] + '...'
   end
   print("\r" + stat_message)
+  if from_path == @root_uri.path
+    print('(' + (100 * line_num / @root_length).to_i.to_s + '%)')
+  end
 
   # URLを解析する 相対パスも考慮
   if url_str.match(/^http/)
@@ -161,6 +166,10 @@ until @stack.empty?
     line_num = 0
     # 中身を読み込む
     response = http.get(path)
+    # 今ルートだったら行数を記録
+    if @root_length.nil?
+      @root_length = response.body.count("\n")
+    end
     response.body.each_line.with_index do |line, line_num|
       # 画像を見つける（再帰チェックはしない）
       line.scan(/<img [^>]*src *= *['"]?(#{$URL_PATTERN})/i) do |match|
@@ -176,7 +185,7 @@ end
 
 # 整形して結果の表示
 message = 'Completed!'
-print("\r" + message + (' ' * (100 - message.length)) + "\n")
+print("\r" + message + (' ' * (106 - message.length)) + "\n")
 @results.sort { |a, b|
   a[:path] == b[:path] ? a[:line] <=> b[:line]
                        : a[:path] <=> b[:path] }
