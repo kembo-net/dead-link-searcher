@@ -215,3 +215,9 @@ print("\r" + message + (' ' * ($MESSAGE_LENGTH + 6 - message.length)) + "\n")
 }
 
 puts 'exec time: ' + (Time.now - start_time).to_i.to_s + 's'
+
+File.open('result(' + @root_uri.host.gsub('.', '_') + ').txt', "w") do |file|
+  @results.each { |r|
+    file.puts("#{r[:path]}:#{r[:line]}(#{r[:message]}) #{r[:url]}")
+  }
+end
