@@ -5,6 +5,7 @@ require "openssl"
 $URL_PATTERN = '(?!mailto:)(?:https?:\/\/)?[\w\/:%#\$&\?\(\)~\.=\+\-]+'
 # 再帰対象から除外するURLの正規表現
 $IGNORE_PATTERNS = [/\.pdf(\?.*)?$/i]
+$MESSAGE_LENGTH = 100
 ONCE_COMMAND = '--once'
 
 @once_mode = ARGV.include?(ONCE_COMMAND)
@@ -13,11 +14,14 @@ ARGV.delete(ONCE_COMMAND)
 @root_url_str = ARGV[0]
 @root_uri = URI.parse(@root_url_str)
 @root_uri.path = '/' if @root_uri.path.empty?
-@root_http=Net::HTTP.new(@root_uri.host, @root_uri.port)
+
+@root_http = Net::HTTP.new(@root_uri.host, @root_uri.port)
+@root_http.open_timeout = 5
 if @root_uri.kind_of?(URI::HTTPS)
   @root_http.use_ssl = true
   @root_http.verify_mode = OpenSSL::SSL::VERIFY_NONE # なんかSSL証明書エラーが出るんで検証しない
 end
+
 @yomikae_host = ARGV[1]
 @root_length = nil
 
@@ -36,6 +40,7 @@ def analyze_url(url_str)
       http = @root_http
     else
       http=Net::HTTP.new(uri.host, uri.port)
+      http.open_timeout = 5
       if uri.kind_of?(URI::HTTPS)
         http.use_ssl = true
         http.verify_mode = OpenSSL::SSL::VERIFY_NONE # なんかSSL証明書エラーが出るんで検証しない
@@ -68,19 +73,24 @@ def check_log(is_loc, path)
   return false
 end
 
+def print_message(path, line, url, message='')
+  page_status = path + ':' + line + ' ' + url
+  len = $MESSAGE_LENGTH - message.length
+  if page_status.length <= len
+    stat_message = page_status + (' ' * (len - page_status.length))
+  else
+    stat_message = stat_message[0...(len-3)] + '...'
+  end
+  print("\r" + stat_message + message)
+end
+
 # ページの存在を確認し、存在しない場合結果を表示するメソッド
 # ローカルの場合は再帰的探索も行う
 until @stack.empty?
   url_str, recursion, from_path, line_num = @stack.pop
 
   # 進捗の表示
-  stat_message = from_path + ":#{line_num} " + url_str
-  if stat_message.length <= 100
-    stat_message = stat_message + (' ' * (100 - stat_message.length))
-  else
-    stat_message = stat_message[0...97] + '...'
-  end
-  print("\r" + stat_message)
+  print_message(from_path, line_num, url_str)
   if from_path == @root_uri.path
     print('(' + (100 * line_num / @root_length).to_i.to_s + '%)')
   end
@@ -110,6 +120,7 @@ until @stack.empty?
 
   # アクセス出来るかどうか
   begin
+    print_message(from_path, line_num, url_str, '[conneting]')
     response = http.head(path)
   rescue Exception => e
     @results.push({
@@ -124,6 +135,7 @@ until @stack.empty?
   cnt = 0
   # リダイレクト
   while response.is_a?(Net::HTTPRedirection)
+    print_message(from_path, line_num, url_str, '[redirecting]')
     cnt += 1
     if cnt > 10
       # リダイレクトループしすぎだぞ
@@ -168,6 +180,7 @@ until @stack.empty?
   if is_local && recursion
     line_num = 0
     # 中身を読み込む
+    print_message(from_path, line_num, url_str, '[loading body]')
     response = http.get(path)
     # 今ルートだったら行数を記録
     if @root_length.nil?
@@ -192,7 +205,7 @@ end
 
 # 整形して結果の表示
 message = 'Completed!'
-print("\r" + message + (' ' * (106 - message.length)) + "\n")
+print("\r" + message + (' ' * ($MESSAGE_LENGTH + 6 - message.length)) + "\n")
 @results.sort { |a, b|
   a[:path] == b[:path] ? a[:line] <=> b[:line]
                        : a[:path] <=> b[:path] }
