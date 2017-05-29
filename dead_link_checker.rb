@@ -4,8 +4,6 @@ require 'time'
 
 start_time = Time.now
 
-# URLを識別する正規表現
-$URL_PATTERN = '(?!mailto:)(?:https?:\/\/)?[\w\/:%#\$&\?\(\)~\.=\+\-]+'
 # 再帰対象から除外するURLの正規表現
 $IGNORE_PATTERNS = [/\.pdf(\?.*)?$/i]
 $MESSAGE_LENGTH = 100
@@ -191,17 +189,16 @@ until @stack.empty?
       @root_length = response.body.count("\n")
     end
     children = []
-    response.body.each_line.with_index do |line, line_num|
-      # 画像を見つける（再帰チェックはしない）
-      line.scan(/<img [^>]*src *= *['"]?(#{$URL_PATTERN})/i) do |match|
-        children.unshift([match[0], false, path, line_num])
-      end
-      # リンクを見つける（再帰チェックするかも）
-      line.scan(/<a [^>]*href *= *['"]?(#{$URL_PATTERN})/i) do |match|
-        child_url = match[0]
-        child_recursion = !(@once_mode || $IGNORE_PATTERNS.inject(false){|r, p| r || p.match(child_url) })
-        children.unshift([child_url, child_recursion, path, line_num])
-      end
+    body_text = response.body
+    line_num = 0
+    while /\A((?:(?:[^<]|(?:<(?!!--)))*<!--(?:[^-]|(?:-(?!->)))*-->)*?(?:[^<]|(?:<(?!!--)))*?)((?:<a [^>]*href)|(?:<img [^>]*src)) *= *['"]?(?!mailto:)((?:https?:\/\/)?[\w\/:%#\$&\?\(\)~\.=\+\-]+)/.match(body_text)
+      m = $~
+      line_num += m[1].count("\n")
+      tag = m[2]
+      url = m[3]
+      child_recursion = /^<a/.match(tag) && !(@once_mode || $IGNORE_PATTERNS.inject(false){|r, p| r || p.match(url) })
+      children.unshift([url, child_recursion, path, line_num])
+      body_text = m.post_match
     end
     @stack += children
   end
