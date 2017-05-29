@@ -1,5 +1,8 @@
-require "net/http"
-require "openssl"
+require 'net/http'
+require 'openssl'
+require 'time'
+
+start_time = Time.now
 
 # URLを識別する正規表現
 $URL_PATTERN = '(?!mailto:)(?:https?:\/\/)?[\w\/:%#\$&\?\(\)~\.=\+\-]+'
@@ -74,12 +77,12 @@ def check_log(is_loc, path)
 end
 
 def print_message(path, line, url, message='')
-  page_status = path + ':' + line + ' ' + url
+  page_status = path + ':' + line.to_s + ' ' + url
   len = $MESSAGE_LENGTH - message.length
   if page_status.length <= len
     stat_message = page_status + (' ' * (len - page_status.length))
   else
-    stat_message = stat_message[0...(len-3)] + '...'
+    stat_message = page_status[0...(len-3)] + '...'
   end
   print("\r" + stat_message + message)
 end
@@ -212,3 +215,5 @@ print("\r" + message + (' ' * ($MESSAGE_LENGTH + 6 - message.length)) + "\n")
 @results.each { |r|
   puts "#{r[:path]}:#{r[:line]}(#{r[:message]}) #{r[:url]}"
 }
+
+puts 'exec time: ' + (Time.now - start_time).to_i.to_s + 's'
