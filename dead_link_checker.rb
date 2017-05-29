@@ -119,7 +119,7 @@ until @stack.empty?
   end
 
   # 探索済だったら飛ばす
-  next if check_log(is_local, is_local ? path : url_str)
+  next if (from_path != '.') && check_log(is_local, is_local ? path : url_str)
 
   # アクセス出来るかどうか
   begin
@@ -138,9 +138,9 @@ until @stack.empty?
   cnt = 0
   # リダイレクト
   while response.is_a?(Net::HTTPRedirection)
-    print_message(from_path, line_num, url_str, '[redirecting]')
     cnt += 1
-    if cnt > 10
+    print_message(from_path, line_num, url_str, '[redirecting' + cnt.to_s + '/10]')
+    if cnt >= 10
       # リダイレクトループしすぎだぞ
       @results.push({
         path: from_path,
@@ -148,6 +148,7 @@ until @stack.empty?
         message: 'too redirect',
         url: url_str
       })
+      break
     end
     http, path, is_local = analyze_url(response['location'])
     # リダイレクト先にアクセス出来るかどうか
