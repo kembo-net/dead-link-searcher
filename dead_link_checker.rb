@@ -7,10 +7,21 @@ start_time = Time.now
 # 再帰対象から除外するURLの正規表現
 $IGNORE_PATTERNS = [/\.pdf(\?.*)?$/i]
 $MESSAGE_LENGTH = 100
-ONCE_COMMAND = '--once'
+OPTS_ABB = {'o': :once, 'l': :local}
 
-@once_mode = ARGV.include?(ONCE_COMMAND)
-ARGV.delete(ONCE_COMMAND)
+@options = []
+ARGV.delete_if{ |arg|
+  case arg
+  when /^--([\w]+)/
+    options.push($1.to_sym)
+    return true
+  when /^-([\w]+)/
+    options.push($1.split('').map{|c| OPTS_ABB[c] })
+    return true
+  else
+    return false
+  end
+}
 
 @root_url_str = ARGV[0]
 @root_uri = URI.parse(@root_url_str)
@@ -116,6 +127,8 @@ until @stack.empty?
     is_local = true
   end
 
+  # ローカルモード用
+  next if options.include?(:local) && !is_local
   # 探索済だったら飛ばす
   next if (from_path != '.') && check_log(is_local, is_local ? path : url_str)
 
@@ -196,7 +209,7 @@ until @stack.empty?
       line_num += m[1].count("\n")
       tag = m[2]
       url = m[3]
-      child_recursion = /^<a/.match(tag) && !(@once_mode || $IGNORE_PATTERNS.inject(false){|r, p| r || p.match(url) })
+      child_recursion = /^<a/.match(tag) && !(@options.include?(:once) || $IGNORE_PATTERNS.inject(false){|r, p| r || p.match(url) })
       children.unshift([url, child_recursion, path, line_num])
       body_text = m.post_match
     end
