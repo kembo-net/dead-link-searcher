@@ -7,19 +7,19 @@ start_time = Time.now
 # 再帰対象から除外するURLの正規表現
 $IGNORE_PATTERNS = [/\.pdf(\?.*)?$/i]
 $MESSAGE_LENGTH = 100
-OPTS_ABB = {'o': :once, 'l': :local}
+OPTS_ABB = {o: :once, l: :local}
 
 @options = []
 ARGV.delete_if{ |arg|
   case arg
   when /^--([\w]+)/
-    options.push($1.to_sym)
-    return true
+    @options.push($1.to_sym)
+    true
   when /^-([\w]+)/
-    options.push($1.split('').map{|c| OPTS_ABB[c] })
-    return true
+    @options.concat($1.split('').map{|c| OPTS_ABB[c.to_sym] })
+    true
   else
-    return false
+    false
   end
 }
 
@@ -128,7 +128,7 @@ until @stack.empty?
   end
 
   # ローカルモード用
-  next if options.include?(:local) && !is_local
+  next if @options.include?(:local) && !is_local
   # 探索済だったら飛ばす
   next if (from_path != '.') && check_log(is_local, is_local ? path : url_str)
 
